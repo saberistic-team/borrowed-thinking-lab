@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, Loader2, RefreshCcw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { BrainAvatar } from "@/components/brain-visuals";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { track } from "@/lib/analytics";
 import { getBrain } from "@/lib/brains";
 import { generateQuestionsFn } from "@/lib/decisions.functions";
-import { useSession } from "@/lib/session-store";
+import { getSession, useSession } from "@/lib/session-store";
 
 export const Route = createFileRoute("/d/$sessionId/questions")({
   head: () => ({
@@ -82,6 +82,15 @@ function QuestionsPage() {
       {loading && session.interrogation.length === 0 ? (
         <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /> The table is reading your problem…
+        </div>
+      ) : null}
+
+      {failed && session.interrogation.length === 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <span>The table didn't come back with questions.</span>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCcw className="size-4" /> Try again
+          </Button>
         </div>
       ) : null}
 
