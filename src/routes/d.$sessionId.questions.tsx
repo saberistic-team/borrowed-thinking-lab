@@ -1,15 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Loader2, RefreshCcw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, RefreshCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { BrainAvatar } from "@/components/brain-visuals";
+import { CouncilBar } from "@/components/council-bar";
+import { SpeakingIndicator } from "@/components/speaking-indicator";
 import { StepFrame } from "@/components/step-frame";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { track } from "@/lib/analytics";
-import { getBrain } from "@/lib/brains";
-import { generateQuestionsFn } from "@/lib/decisions.functions";
+import { getBrain, getBrains } from "@/lib/brains";
+import { generateQuestionForBrainFn } from "@/lib/decisions.functions";
+import type { InterrogationItem } from "@/lib/decision-types";
 import { getSession, useSession } from "@/lib/session-store";
 
 export const Route = createFileRoute("/d/$sessionId/questions")({
@@ -29,39 +32,69 @@ function QuestionsPage() {
   const { sessionId } = Route.useParams();
   const navigate = useNavigate();
   const { session, ready, update } = useSession(sessionId);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [thinking, setThinking] = useState<Set<string>>(new Set());
+  const [failed, setFailed] = useState<string[]>([]);
+  const loading = useRef(false);
 
-  const load = useCallback(() => {
-    const current = getSession(sessionId);
-    if (!current || current.selectedBrainIds.length === 0) return;
-    setLoading(true);
-    setFailed(false);
-    generateQuestionsFn({
-      data: {
-        problem: current.problem,
-        context: current.context,
-        brainIds: current.selectedBrainIds,
-      },
-    })
-      .then((questions) => {
-        if (questions.length === 0) setFailed(true);
-        else update({ interrogation: questions });
-      })
-      .catch((err: unknown) => {
-        setFailed(true);
-        toast.error(err instanceof Error ? err.message : "The table went quiet. Try again.");
-      })
-      .finally(() => setLoading(false));
-  }, [sessionId, update]);
+  const brains = useMemo(() => getBrains(session?.selectedBrainIds ?? []), [session?.selectedBrainIds]);
+
+  const load = useCallback(
+    async (onlyIds?: string[]) => {
+      const current = getSession(sessionId);
+      if (!current || current.selectedBrainIds.length === 0 || loading.current) return;
+      const targets = (onlyIds ?? current.selectedBrainIds).filter(
+        (id) => !current.interrogation.some((q) => q.brainId === id),
+      );
+      if (targets.length === 0) return;
+
+      loading.current = true;
+      setFailed([]);
+      setThinking(new Set(targets));
+      const order = current.selectedBrainIds;
+
+      await Promise.all(
+        targets.map(async (brainId) => {
+          try {
+            const item = await generateQuestionForBrainFn({
+              data: {
+                problem: current.problem,
+                context: current.context,
+                brainIds: current.selectedBrainIds,
+                brainId,
+              },
+            });
+            update((prev) => ({
+              interrogation: [
+                ...prev.interrogation.filter((q) => q.brainId !== brainId),
+                item as InterrogationItem,
+              ].sort((a, b) => order.indexOf(a.brainId) - order.indexOf(b.brainId)),
+            }));
+          } catch (err) {
+            setFailed((prev) => [...prev, brainId]);
+            toast.error(
+              err instanceof Error ? err.message : `${getBrain(brainId)?.name ?? "A brain"} stayed silent.`,
+            );
+          } finally {
+            setThinking((prev) => {
+              const next = new Set(prev);
+              next.delete(brainId);
+              return next;
+            });
+          }
+        }),
+      );
+      loading.current = false;
+    },
+    [sessionId, update],
+  );
 
   useEffect(() => {
-    if (!ready || !session || loading || failed) return;
-    if (session.interrogation.length > 0 || session.selectedBrainIds.length === 0) return;
-    load();
+    if (!ready || !session) return;
+    if (session.selectedBrainIds.length === 0) return;
+    if (session.interrogation.length >= session.selectedBrainIds.length) return;
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, session?.id, session?.selectedBrainIds.length]);
-
 
   if (!ready) return <StepFrame step={2} title="Loading" />;
   if (!session)
@@ -72,6 +105,7 @@ function QuestionsPage() {
     );
 
   const answered = session.interrogation.filter((i) => (i.answer ?? "").trim().length > 0).length;
+  const thinkingBrains = brains.filter((b) => thinking.has(b.id));
 
   return (
     <StepFrame
@@ -79,16 +113,14 @@ function QuestionsPage() {
       title="They have questions first."
       subtitle="Answer what you can. “I don't know” is a real answer — they will factor it in."
     >
-      {loading && session.interrogation.length === 0 ? (
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> The table is reading your problem…
-        </div>
-      ) : null}
+      <CouncilBar brains={brains} thinkingIds={thinking} />
 
-      {failed && session.interrogation.length === 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
-          <span>The table didn't come back with questions.</span>
-          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+      {failed.length > 0 ? (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <span>
+            {failed.length} brain{failed.length === 1 ? "" : "s"} didn't come back with a question.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => void load(failed)}>
             <RefreshCcw className="size-4" /> Try again
           </Button>
         </div>
@@ -99,9 +131,9 @@ function QuestionsPage() {
           const brain = getBrain(item.brainId);
           return (
             <div
-              key={`${item.brainId}-${index}`}
+              key={item.brainId}
               className="seat-in rounded-2xl border border-border bg-card p-5"
-              style={{ animationDelay: `${index * 70}ms` }}
+              style={{ animationDelay: `${Math.min(index, 4) * 70}ms` }}
             >
               <div className="flex items-start gap-3">
                 {brain ? <BrainAvatar brain={brain} /> : null}
@@ -115,8 +147,8 @@ function QuestionsPage() {
                     onChange={(e) => {
                       const value = e.target.value;
                       update((prev) => ({
-                        interrogation: prev.interrogation.map((q, i) =>
-                          i === index ? { ...q, answer: value } : q,
+                        interrogation: prev.interrogation.map((q) =>
+                          q.brainId === item.brainId ? { ...q, answer: value } : q,
                         ),
                       }));
                     }}
@@ -127,6 +159,10 @@ function QuestionsPage() {
             </div>
           );
         })}
+
+        {thinkingBrains.map((b) => (
+          <SpeakingIndicator key={b.id} brain={b} verb="is reading your problem" />
+        ))}
       </div>
 
       <div className="sticky bottom-0 mt-8 -mx-5 flex items-center justify-between gap-4 border-t border-border bg-background/90 px-5 py-4 backdrop-blur">
