@@ -216,9 +216,18 @@ ROUND ONE POSITIONS:
 ${positionsBlock(positions)}`,
   );
 
-  return result.exchanges.filter(
+  const valid = result.exchanges.filter(
     (e) => brainIds.includes(e.fromBrainId) && brainIds.includes(e.toBrainId) && e.fromBrainId !== e.toBrainId,
   );
+  if (valid.length > 0) return valid;
+
+  // Fallback: the model used ids we don't recognise — remap onto seated brains.
+  return result.exchanges.map((e, i) => ({
+    ...e,
+    fromBrainId: brainIds.includes(e.fromBrainId) ? e.fromBrainId : brainIds[i % brainIds.length]!,
+    toBrainId: brainIds.includes(e.toBrainId) ? e.toBrainId : brainIds[(i + 1) % brainIds.length]!,
+  }));
+
 }
 
 /* ------------------------- round 3: final positions ----------------------- */
