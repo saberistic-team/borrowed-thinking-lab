@@ -170,18 +170,17 @@ const positionSchema = z.object({
   confidence: z.number().min(0).max(100),
 });
 
-export async function generatePositions(
+export async function generatePositionForBrain(
   problem: string,
   context: DecisionContext,
-  brainIds: string[],
+  brainId: string,
   interrogation: InterrogationItem[],
-): Promise<BrainPosition[]> {
-  const brains = getBrains(brainIds);
-  const results = await Promise.all(
-    brains.map(async (b) => {
-      const p = await generateStructured(
-        positionSchema,
-        `${BASE_PROMPT}
+): Promise<BrainPosition> {
+  const b = getBrain(brainId);
+  if (!b) throw new Error("Unknown brain");
+  const p = await generateStructured(
+    positionSchema,
+    `${BASE_PROMPT}
 
 ${brainCard(b)}
 
@@ -191,12 +190,19 @@ This is round one. You have not heard the others. Give your independent position
 "confidence" is your own calibrated confidence, 0-100.
 
 Return JSON: {"stance": ..., "recommendation": "...", "reasoning": ["..."], "assumptions": ["..."], "biggestConcern": "...", "confidence": 0-100}`,
-        contextBlock(problem, context, interrogation),
-      );
-      return { brainId: b.id, ...p } satisfies BrainPosition;
-    }),
+    contextBlock(problem, context, interrogation),
   );
-  return results;
+  return { brainId: b.id, ...p } satisfies BrainPosition;
+}
+
+export async function generatePositions(
+  problem: string,
+  context: DecisionContext,
+  brainIds: string[],
+  interrogation: InterrogationItem[],
+): Promise<BrainPosition[]> {
+  const brains = getBrains(brainIds);
+  return Promise.all(brains.map((b) => generatePositionForBrain(problem, context, b.id, interrogation)));
 }
 
 /* ------------------------ round 2: cross examination ---------------------- */
