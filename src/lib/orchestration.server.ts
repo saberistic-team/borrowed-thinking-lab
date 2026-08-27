@@ -277,28 +277,27 @@ const updateSchema = positionSchema.extend({
   changeSummary: z.string().nullable().optional(),
 });
 
-export async function generateFinalPositions(
+export async function generateFinalPositionForBrain(
   problem: string,
   context: DecisionContext,
-  brainIds: string[],
+  brainId: string,
   interrogation: InterrogationItem[],
   positions: BrainPosition[],
   debate: DebateMessage[],
-): Promise<UpdatedPosition[]> {
-  const brains = getBrains(brainIds);
+): Promise<UpdatedPosition> {
+  const b = getBrain(brainId);
+  if (!b) throw new Error("Unknown brain");
   const debateBlock = debate
     .map(
       (d) =>
         `${getBrain(d.fromBrainId)?.name} → ${getBrain(d.toBrainId)?.name} (${d.disagreementType}): ${d.challenge}\n  ${getBrain(d.toBrainId)?.name}: ${d.response}`,
     )
     .join("\n\n");
+  const prior = positions.find((p) => p.brainId === b.id);
 
-  return Promise.all(
-    brains.map(async (b) => {
-      const prior = positions.find((p) => p.brainId === b.id);
-      const p = await generateStructured(
-        updateSchema,
-        `${BASE_PROMPT}
+  const p = await generateStructured(
+    updateSchema,
+    `${BASE_PROMPT}
 
 ${brainCard(b)}
 
@@ -306,7 +305,7 @@ You have now heard the table. Give your final position. Do not change your mind 
 If your recommendation, stance, or confidence changed meaningfully, set changedMind true and write changeSummary as one sentence starting with what moved you. Otherwise changedMind is false and changeSummary is null.
 
 Return JSON: {"stance": ..., "recommendation": "...", "reasoning": ["..."], "assumptions": ["..."], "biggestConcern": "...", "confidence": 0-100, "changedMind": true|false, "changeSummary": string or null}`,
-        `${contextBlock(problem, context, interrogation)}
+    `${contextBlock(problem, context, interrogation)}
 
 YOUR ROUND ONE POSITION:
 ${prior ? `[${prior.stance}] ${prior.recommendation} (confidence ${prior.confidence})` : "(none)"}
@@ -316,14 +315,28 @@ ${positionsBlock(positions)}
 
 CROSS-EXAMINATION:
 ${debateBlock || "(none)"}`,
-      );
-      return {
-        brainId: b.id,
-        ...p,
-        changedMind: p.changedMind,
-        changeSummary: p.changeSummary ?? undefined,
-      } satisfies UpdatedPosition;
-    }),
+  );
+
+  return {
+    brainId: b.id,
+    ...p,
+    changedMind: p.changedMind,
+    changeSummary: p.changeSummary ?? undefined,
+  } satisfies UpdatedPosition;
+}
+
+export async function generateFinalPositions(
+  problem: string,
+  context: DecisionContext,
+  brainIds: string[],
+  interrogation: InterrogationItem[],
+  positions: BrainPosition[],
+  debate: DebateMessage[],
+): Promise<UpdatedPosition[]> {
+  return Promise.all(
+    getBrains(brainIds).map((b) =>
+      generateFinalPositionForBrain(problem, context, b.id, interrogation, positions, debate),
+    ),
   );
 }
 
