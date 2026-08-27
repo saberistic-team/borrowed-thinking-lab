@@ -10,33 +10,180 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as RoundtablesRouteImport } from './routes/roundtables'
+import { Route as BrainsIndexRouteImport } from './routes/brains.index'
+import { Route as BrainsSlugRouteImport } from './routes/brains.$slug'
+import { Route as DecisionsIndexRouteImport } from './routes/decisions.index'
+import { Route as DecisionsIdRouteImport } from './routes/decisions.$id'
+import { Route as SSlugRouteImport } from './routes/s.$slug'
+import { Route as DSessionIdBoardRouteImport } from './routes/d.$sessionId.board'
+import { Route as DSessionIdDebateRouteImport } from './routes/d.$sessionId.debate'
+import { Route as DSessionIdQuestionsRouteImport } from './routes/d.$sessionId.questions'
+import { Route as DSessionIdSetupRouteImport } from './routes/d.$sessionId.setup'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoundtablesRoute = RoundtablesRouteImport.update({
+  id: '/roundtables',
+  path: '/roundtables',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrainsIndexRoute = BrainsIndexRouteImport.update({
+  id: '/brains/',
+  path: '/brains/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrainsSlugRoute = BrainsSlugRouteImport.update({
+  id: '/brains/$slug',
+  path: '/brains/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DecisionsIndexRoute = DecisionsIndexRouteImport.update({
+  id: '/decisions/',
+  path: '/decisions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DecisionsIdRoute = DecisionsIdRouteImport.update({
+  id: '/decisions/$id',
+  path: '/decisions/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SSlugRoute = SSlugRouteImport.update({
+  id: '/s/$slug',
+  path: '/s/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DSessionIdBoardRoute = DSessionIdBoardRouteImport.update({
+  id: '/d/$sessionId/board',
+  path: '/d/$sessionId/board',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DSessionIdDebateRoute = DSessionIdDebateRouteImport.update({
+  id: '/d/$sessionId/debate',
+  path: '/d/$sessionId/debate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DSessionIdQuestionsRoute = DSessionIdQuestionsRouteImport.update({
+  id: '/d/$sessionId/questions',
+  path: '/d/$sessionId/questions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DSessionIdSetupRoute = DSessionIdSetupRouteImport.update({
+  id: '/d/$sessionId/setup',
+  path: '/d/$sessionId/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/roundtables': typeof RoundtablesRoute
+  '/brains/$slug': typeof BrainsSlugRoute
+  '/decisions/$id': typeof DecisionsIdRoute
+  '/s/$slug': typeof SSlugRoute
+  '/brains/': typeof BrainsIndexRoute
+  '/decisions/': typeof DecisionsIndexRoute
+  '/d/$sessionId/board': typeof DSessionIdBoardRoute
+  '/d/$sessionId/debate': typeof DSessionIdDebateRoute
+  '/d/$sessionId/questions': typeof DSessionIdQuestionsRoute
+  '/d/$sessionId/setup': typeof DSessionIdSetupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/roundtables': typeof RoundtablesRoute
+  '/brains/$slug': typeof BrainsSlugRoute
+  '/decisions/$id': typeof DecisionsIdRoute
+  '/s/$slug': typeof SSlugRoute
+  '/brains': typeof BrainsIndexRoute
+  '/decisions': typeof DecisionsIndexRoute
+  '/d/$sessionId/board': typeof DSessionIdBoardRoute
+  '/d/$sessionId/debate': typeof DSessionIdDebateRoute
+  '/d/$sessionId/questions': typeof DSessionIdQuestionsRoute
+  '/d/$sessionId/setup': typeof DSessionIdSetupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/roundtables': typeof RoundtablesRoute
+  '/brains/$slug': typeof BrainsSlugRoute
+  '/decisions/$id': typeof DecisionsIdRoute
+  '/s/$slug': typeof SSlugRoute
+  '/brains/': typeof BrainsIndexRoute
+  '/decisions/': typeof DecisionsIndexRoute
+  '/d/$sessionId/board': typeof DSessionIdBoardRoute
+  '/d/$sessionId/debate': typeof DSessionIdDebateRoute
+  '/d/$sessionId/questions': typeof DSessionIdQuestionsRoute
+  '/d/$sessionId/setup': typeof DSessionIdSetupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/roundtables'
+    | '/brains/$slug'
+    | '/decisions/$id'
+    | '/s/$slug'
+    | '/brains/'
+    | '/decisions/'
+    | '/d/$sessionId/board'
+    | '/d/$sessionId/debate'
+    | '/d/$sessionId/questions'
+    | '/d/$sessionId/setup'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/roundtables'
+    | '/brains/$slug'
+    | '/decisions/$id'
+    | '/s/$slug'
+    | '/brains'
+    | '/decisions'
+    | '/d/$sessionId/board'
+    | '/d/$sessionId/debate'
+    | '/d/$sessionId/questions'
+    | '/d/$sessionId/setup'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/roundtables'
+    | '/brains/$slug'
+    | '/decisions/$id'
+    | '/s/$slug'
+    | '/brains/'
+    | '/decisions/'
+    | '/d/$sessionId/board'
+    | '/d/$sessionId/debate'
+    | '/d/$sessionId/questions'
+    | '/d/$sessionId/setup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  RoundtablesRoute: typeof RoundtablesRoute
+  BrainsSlugRoute: typeof BrainsSlugRoute
+  DecisionsIdRoute: typeof DecisionsIdRoute
+  SSlugRoute: typeof SSlugRoute
+  BrainsIndexRoute: typeof BrainsIndexRoute
+  DecisionsIndexRoute: typeof DecisionsIndexRoute
+  DSessionIdBoardRoute: typeof DSessionIdBoardRoute
+  DSessionIdDebateRoute: typeof DSessionIdDebateRoute
+  DSessionIdQuestionsRoute: typeof DSessionIdQuestionsRoute
+  DSessionIdSetupRoute: typeof DSessionIdSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +195,99 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roundtables': {
+      id: '/roundtables'
+      path: '/roundtables'
+      fullPath: '/roundtables'
+      preLoaderRoute: typeof RoundtablesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brains/': {
+      id: '/brains/'
+      path: '/brains'
+      fullPath: '/brains/'
+      preLoaderRoute: typeof BrainsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brains/$slug': {
+      id: '/brains/$slug'
+      path: '/brains/$slug'
+      fullPath: '/brains/$slug'
+      preLoaderRoute: typeof BrainsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/decisions/': {
+      id: '/decisions/'
+      path: '/decisions'
+      fullPath: '/decisions/'
+      preLoaderRoute: typeof DecisionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/decisions/$id': {
+      id: '/decisions/$id'
+      path: '/decisions/$id'
+      fullPath: '/decisions/$id'
+      preLoaderRoute: typeof DecisionsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/s/$slug': {
+      id: '/s/$slug'
+      path: '/s/$slug'
+      fullPath: '/s/$slug'
+      preLoaderRoute: typeof SSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/d/$sessionId/board': {
+      id: '/d/$sessionId/board'
+      path: '/d/$sessionId/board'
+      fullPath: '/d/$sessionId/board'
+      preLoaderRoute: typeof DSessionIdBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/d/$sessionId/debate': {
+      id: '/d/$sessionId/debate'
+      path: '/d/$sessionId/debate'
+      fullPath: '/d/$sessionId/debate'
+      preLoaderRoute: typeof DSessionIdDebateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/d/$sessionId/questions': {
+      id: '/d/$sessionId/questions'
+      path: '/d/$sessionId/questions'
+      fullPath: '/d/$sessionId/questions'
+      preLoaderRoute: typeof DSessionIdQuestionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/d/$sessionId/setup': {
+      id: '/d/$sessionId/setup'
+      path: '/d/$sessionId/setup'
+      fullPath: '/d/$sessionId/setup'
+      preLoaderRoute: typeof DSessionIdSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  RoundtablesRoute: RoundtablesRoute,
+  BrainsSlugRoute: BrainsSlugRoute,
+  DecisionsIdRoute: DecisionsIdRoute,
+  SSlugRoute: SSlugRoute,
+  BrainsIndexRoute: BrainsIndexRoute,
+  DecisionsIndexRoute: DecisionsIndexRoute,
+  DSessionIdBoardRoute: DSessionIdBoardRoute,
+  DSessionIdDebateRoute: DSessionIdDebateRoute,
+  DSessionIdQuestionsRoute: DSessionIdQuestionsRoute,
+  DSessionIdSetupRoute: DSessionIdSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
