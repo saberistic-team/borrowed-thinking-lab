@@ -111,11 +111,19 @@ Return JSON: {"questions": [{"brainId": "...", "question": "..."}]} — one entr
     contextBlock(problem, context, []),
   );
 
-  const seen = new Set<string>();
-  return result.questions
-    .filter((q) => getBrain(q.brainId) && brainIds.includes(q.brainId) && !seen.has(q.brainId) && seen.add(q.brainId) !== undefined)
-    .map((q) => ({ brainId: q.brainId, question: q.question }));
+  // The model sometimes returns ids that don't match the catalog exactly; fall back
+  // to positional mapping so every seated brain always gets a question.
+  const byId = new Map<string, string>();
+  result.questions.forEach((q, i) => {
+    const id = brainIds.includes(q.brainId) ? q.brainId : brainIds[i];
+    if (id && !byId.has(id)) byId.set(id, q.question);
+  });
+
+  return brainIds
+    .filter((id) => byId.has(id))
+    .map((id) => ({ brainId: id, question: byId.get(id)! }));
 }
+
 
 /* --------------------------- round 1: positions --------------------------- */
 
