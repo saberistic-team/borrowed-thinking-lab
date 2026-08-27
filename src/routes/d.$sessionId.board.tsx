@@ -53,7 +53,9 @@ function AssumptionRow({ a, problem }: { a: DecisionAssumption; problem: string 
           const b = getBrain(id);
           return b ? <BrainAvatar key={`s-${id}`} brain={b} size="sm" active /> : null;
         })}
-        {a.challengedByBrainIds.length ? <span className="mx-1">vs</span> : null}
+        {a.supportedByBrainIds.length && a.challengedByBrainIds.length ? (
+          <span className="mx-1">vs</span>
+        ) : null}
         {a.challengedByBrainIds.map((id) => {
           const b = getBrain(id);
           return b ? <BrainAvatar key={`c-${id}`} brain={b} size="sm" /> : null;
@@ -289,7 +291,10 @@ function BoardPage() {
               {board.minorityOpinion ? (
                 <>
                   <h2 className="font-display text-lg">
-                    Minority opinion — {getBrain(board.minorityOpinion.brainId)?.name}
+                    Minority opinion
+                    {getBrain(board.minorityOpinion.brainId)
+                      ? ` — ${getBrain(board.minorityOpinion.brainId)!.name}`
+                      : ""}
                   </h2>
                   <p className="mt-2 text-sm">{board.minorityOpinion.argument}</p>
                 </>
