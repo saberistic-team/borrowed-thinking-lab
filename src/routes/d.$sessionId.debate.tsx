@@ -1,21 +1,32 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Loader2, RefreshCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { ArrowRight, FastForward, RefreshCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { BrainAvatar } from "@/components/brain-visuals";
+import { CouncilBar, RoundStrip } from "@/components/council-bar";
+import {
+  ExchangeTurn,
+  PositionTurn,
+  RoundHeading,
+  TranscriptFeed,
+} from "@/components/debate-transcript";
+import { SpeakingIndicator } from "@/components/speaking-indicator";
 import { StepFrame } from "@/components/step-frame";
 import { Button } from "@/components/ui/button";
 import { track } from "@/lib/analytics";
-import { getBrain } from "@/lib/brains";
+import { getBrain, getBrains } from "@/lib/brains";
 import {
   generateCrossExaminationFn,
-  generateFinalPositionsFn,
-  generatePositionsFn,
+  generateFinalPositionForBrainFn,
+  generatePositionForBrainFn,
 } from "@/lib/decisions.functions";
-import { STANCE_LABEL, type BrainPosition, type UpdatedPosition } from "@/lib/decision-types";
+import type {
+  BrainPosition,
+  DebateMessage,
+  Stance,
+  UpdatedPosition,
+} from "@/lib/decision-types";
+import { useRevealQueue } from "@/hooks/use-reveal-queue";
 import { useSession } from "@/lib/session-store";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/d/$sessionId/debate")({
   head: () => ({
@@ -30,105 +41,152 @@ export const Route = createFileRoute("/d/$sessionId/debate")({
   component: DebatePage,
 });
 
-type Stage = "idle" | "positions" | "cross" | "final" | "done";
+type Turn =
+  | { kind: "round"; round: 1 | 2 | 3; speaker: string }
+  | { kind: "position"; position: BrainPosition; speaker: string }
+  | { kind: "exchange"; message: DebateMessage; speaker: string }
+  | { kind: "final"; position: UpdatedPosition; speaker: string };
 
-const STAGE_LABEL: Record<Stage, string> = {
-  idle: "",
-  positions: "Round 1 — each brain takes a position, alone",
-  cross: "Round 2 — cross-examination",
-  final: "Round 3 — final positions and changed minds",
-  done: "The table has finished",
+const ROUND_TITLE: Record<1 | 2 | 3, string> = {
+  1: "Round 1 — each brain speaks alone",
+  2: "Round 2 — cross-examination",
+  3: "Round 3 — final positions",
 };
-
-function PositionCard({ position, final }: { position: BrainPosition | UpdatedPosition; final?: boolean }) {
-  const brain = getBrain(position.brainId);
-  const changed = final && (position as UpdatedPosition).changedMind;
-  return (
-    <div className="seat-in rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-start gap-3">
-        {brain ? <BrainAvatar brain={brain} active={changed} /> : null}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-display text-base">{brain?.name}</p>
-            <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-              {STANCE_LABEL[position.stance]}
-            </span>
-            <span className="text-xs text-muted-foreground">{position.confidence}% confident</span>
-            {changed ? (
-              <span className="rounded-full bg-ember/12 px-2 py-0.5 text-xs text-ember">Changed mind</span>
-            ) : null}
-          </div>
-          <p className="mt-2 leading-relaxed">{position.recommendation}</p>
-          <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
-            {position.reasoning.map((r, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-ember">—</span>
-                {r}
-              </li>
-            ))}
-          </ul>
-          {changed ? (
-            <p className="mt-3 rounded-lg bg-secondary/70 p-3 text-sm">
-              {(position as UpdatedPosition).changeSummary}
-            </p>
-          ) : null}
-          <p className="mt-3 text-sm">
-            <span className="text-muted-foreground">Biggest concern: </span>
-            {position.biggestConcern}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function DebatePage() {
   const { sessionId } = Route.useParams();
   const navigate = useNavigate();
   const { session, ready, update } = useSession(sessionId);
-  const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [round, setRound] = useState<1 | 2 | 3>(1);
+  const [thinking, setThinking] = useState<Set<string>>(new Set());
   const started = useRef(false);
+
+  const { revealed, pending, speakingId, push, seed, skip, reset, instant } = useRevealQueue<Turn>(
+    (t) => t.speaker,
+  );
+
+  const brains = useMemo(() => getBrains(session?.selectedBrainIds ?? []), [session?.selectedBrainIds]);
+
+  const stances = useMemo(() => {
+    const map: Record<string, Stance | undefined> = {};
+    for (const turn of revealed) {
+      if (turn.kind === "position" || turn.kind === "final") map[turn.position.brainId] = turn.position.stance;
+    }
+    return map;
+  }, [revealed]);
+
+  const changed = useMemo(() => {
+    const set = new Set<string>();
+    for (const turn of revealed) {
+      if (turn.kind === "final" && turn.position.changedMind) set.add(turn.position.brainId);
+    }
+    return set;
+  }, [revealed]);
 
   const run = useCallback(async () => {
     const current = session;
     if (!current) return;
     setError(null);
-    const payloadBase = {
+    setRunning(true);
+    reset();
+    const base = {
       problem: current.problem,
       context: current.context,
       brainIds: current.selectedBrainIds,
       interrogation: current.interrogation,
     };
+    const ids = current.selectedBrainIds;
+
     try {
-      track("debate_started", { brains: current.selectedBrainIds.length });
-      setStage("positions");
-      const positions = await generatePositionsFn({ data: payloadBase });
-      update({ initialPositions: positions });
+      track("debate_started", { brains: ids.length });
 
-      setStage("cross");
-      const debate = await generateCrossExaminationFn({ data: { ...payloadBase, positions } });
+      /* ---------------------------- round 1 ---------------------------- */
+      setRound(1);
+      setThinking(new Set(ids));
+      push({ kind: "round", round: 1, speaker: ids[0] ?? "" });
+
+      const positions: BrainPosition[] = [];
+      await Promise.all(
+        ids.map(async (brainId) => {
+          const position = await generatePositionForBrainFn({ data: { ...base, brainId } });
+          positions.push(position);
+          setThinking((prev) => {
+            const next = new Set(prev);
+            next.delete(brainId);
+            return next;
+          });
+          push({ kind: "position", position, speaker: brainId });
+          update({ initialPositions: [...positions] });
+        }),
+      );
+
+      /* ---------------------------- round 2 ---------------------------- */
+      setRound(2);
+      setThinking(new Set(ids));
+      push({ kind: "round", round: 2, speaker: ids[0] ?? "" });
+      const debate = await generateCrossExaminationFn({ data: { ...base, positions } });
+      setThinking(new Set());
       update({ debateMessages: debate });
+      debate.forEach((message) => push({ kind: "exchange", message, speaker: message.fromBrainId }));
 
-      setStage("final");
-      const finals = await generateFinalPositionsFn({ data: { ...payloadBase, positions, debate } });
-      update({ finalPositions: finals });
-      finals
-        .filter((f) => f.changedMind)
-        .forEach((f) => track("brain_changed_mind", { brainId: f.brainId }));
-
-      setStage("done");
+      /* ---------------------------- round 3 ---------------------------- */
+      setRound(3);
+      setThinking(new Set(ids));
+      push({ kind: "round", round: 3, speaker: ids[0] ?? "" });
+      const finals: UpdatedPosition[] = [];
+      await Promise.all(
+        ids.map(async (brainId) => {
+          const position = await generateFinalPositionForBrainFn({
+            data: { ...base, brainId, positions, debate },
+          });
+          finals.push(position);
+          setThinking((prev) => {
+            const next = new Set(prev);
+            next.delete(brainId);
+            return next;
+          });
+          push({ kind: "final", position, speaker: brainId });
+          if (position.changedMind) track("brain_changed_mind", { brainId });
+          update({ finalPositions: [...finals] });
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "The roundtable broke down.");
-      setStage("idle");
+    } finally {
+      setThinking(new Set());
+      setRunning(false);
     }
-  }, [session, update]);
+  }, [session, update, push, reset]);
 
   useEffect(() => {
     if (!ready || !session || started.current) return;
     started.current = true;
     if (session.finalPositions.length > 0) {
-      setStage("done");
+      // Resume: replay the whole transcript instantly.
+      const turns: Turn[] = [
+        { kind: "round", round: 1, speaker: "" },
+        ...session.initialPositions.map<Turn>((position) => ({
+          kind: "position",
+          position,
+          speaker: position.brainId,
+        })),
+        { kind: "round", round: 2, speaker: "" },
+        ...session.debateMessages.map<Turn>((message) => ({
+          kind: "exchange",
+          message,
+          speaker: message.fromBrainId,
+        })),
+        { kind: "round", round: 3, speaker: "" },
+        ...session.finalPositions.map<Turn>((position) => ({
+          kind: "final",
+          position,
+          speaker: position.brainId,
+        })),
+      ];
+      seed(turns);
+      setRound(3);
       return;
     }
     void run();
@@ -143,17 +201,26 @@ function DebatePage() {
       </StepFrame>
     );
 
-  const busy = stage !== "idle" && stage !== "done";
-  const finals = session.finalPositions;
+  const speakingBrain = speakingId ? getBrain(speakingId) : undefined;
+  const thinkingBrains = brains.filter((b) => thinking.has(b.id));
+  const finished = !running && pending === 0 && session.finalPositions.length > 0;
 
   return (
-    <StepFrame step={3} title="The Roundtable" subtitle={STAGE_LABEL[stage] || undefined} wide>
-      {busy ? (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
-          <Loader2 className="size-4 animate-spin text-ember" />
-          {STAGE_LABEL[stage]}
-        </div>
-      ) : null}
+    <StepFrame
+      step={3}
+      title="The Roundtable"
+      subtitle={finished ? "The table has finished." : ROUND_TITLE[round]}
+      wide
+    >
+      <CouncilBar
+        brains={brains}
+        speakingId={speakingId}
+        stances={stances}
+        changed={changed}
+        thinkingIds={thinking}
+      />
+
+      <RoundStrip round={round} />
 
       {error ? (
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
@@ -164,79 +231,42 @@ function DebatePage() {
         </div>
       ) : null}
 
-      {session.initialPositions.length > 0 ? (
-        <section>
-          <h2 className="text-xs tracking-[0.18em] text-muted-foreground uppercase">
-            Round 1 — opening positions
-          </h2>
-          <div className="mt-4 grid gap-4">
-            {session.initialPositions.map((p) => (
-              <PositionCard key={p.brainId} position={p} />
+      <TranscriptFeed count={revealed.length + (speakingId ? 1 : 0)}>
+        {revealed.map((turn, i) => {
+          if (turn.kind === "round") return <RoundHeading key={`r${i}`}>{ROUND_TITLE[turn.round]}</RoundHeading>;
+          if (turn.kind === "exchange") return <ExchangeTurn key={`e${i}`} message={turn.message} />;
+          return <PositionTurn key={`p${i}`} position={turn.position} final={turn.kind === "final"} />;
+        })}
+
+        {speakingBrain ? <SpeakingIndicator brain={speakingBrain} verb="is speaking" /> : null}
+
+        {!speakingBrain && thinkingBrains.length > 0 ? (
+          <div className="flex flex-wrap gap-3">
+            {thinkingBrains.map((b) => (
+              <SpeakingIndicator key={b.id} brain={b} />
             ))}
           </div>
-        </section>
-      ) : null}
+        ) : null}
+      </TranscriptFeed>
 
-      {session.debateMessages.length > 0 ? (
-        <section className="mt-12">
-          <h2 className="text-xs tracking-[0.18em] text-muted-foreground uppercase">
-            Round 2 — cross-examination
-          </h2>
-          <div className="mt-4 space-y-4">
-            {session.debateMessages.map((m, i) => {
-              const from = getBrain(m.fromBrainId);
-              const to = getBrain(m.toBrainId);
-              return (
-                <div key={i} className="seat-in rounded-2xl border border-border bg-card p-5">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    {from ? <BrainAvatar brain={from} size="sm" /> : null}
-                    <span className="font-medium">{from?.name}</span>
-                    <span className="text-muted-foreground">challenges</span>
-                    {to ? <BrainAvatar brain={to} size="sm" /> : null}
-                    <span className="font-medium">{to?.name}</span>
-                    <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                      {m.disagreementType.replaceAll("_", " ")}
-                    </span>
-                  </div>
-                  <p className="mt-3 border-l-2 border-ember/60 pl-3 leading-relaxed">{m.challenge}</p>
-                  <p className={cn("mt-3 border-l-2 border-border pl-3 leading-relaxed text-muted-foreground")}>
-                    {m.response}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      {finals.length > 0 ? (
-        <section className="mt-12">
-          <h2 className="text-xs tracking-[0.18em] text-muted-foreground uppercase">
-            Round 3 — final positions
-          </h2>
-          {finals.some((f) => f.changedMind) ? (
-            <p className="mt-2 text-sm text-ember">
-              {finals.filter((f) => f.changedMind).length} brain
-              {finals.filter((f) => f.changedMind).length === 1 ? "" : "s"} changed their mind.
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">Nobody moved. The disagreement is real.</p>
-          )}
-          <div className="mt-4 grid gap-4">
-            {finals.map((p) => (
-              <PositionCard key={p.brainId} position={p} final />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <div className="sticky bottom-0 mt-10 -mx-5 flex items-center justify-between gap-4 border-t border-border bg-background/90 px-5 py-4 backdrop-blur">
-        <p className="text-sm text-muted-foreground">
-          {stage === "done" ? "Now see what it all adds up to." : "You can skip ahead once they finish."}
-        </p>
+      <div className="sticky bottom-0 mt-10 -mx-5 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background/90 px-5 py-4 backdrop-blur">
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            {finished
+              ? changed.size > 0
+                ? `${changed.size} brain${changed.size === 1 ? "" : "s"} changed their mind.`
+                : "Nobody moved. The disagreement is real."
+              : "The table is in session…"}
+          </p>
+          {!instant && (pending > 0 || running) ? (
+            <Button size="sm" variant="ghost" onClick={skip}>
+              <FastForward className="size-4" /> Skip the theatre
+            </Button>
+          ) : null}
+        </div>
         <Button
           size="lg"
-          disabled={finals.length === 0}
+          disabled={session.finalPositions.length === 0}
           onClick={() => navigate({ to: "/d/$sessionId/board", params: { sessionId } })}
         >
           Decision Board

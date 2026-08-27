@@ -37,6 +37,48 @@ export const generateQuestionsFn = createServerFn({ method: "POST" })
     return generateQuestions(data.problem, data.context as DecisionContext, data.brainIds);
   });
 
+const brainTurnSchema = baseSchema.extend({ brainId: z.string().min(1) });
+
+export const generateQuestionForBrainFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => brainTurnSchema.parse(d))
+  .handler(async ({ data }) => {
+    const { generateQuestionForBrain } = await import("./orchestration.server");
+    return generateQuestionForBrain(
+      data.problem,
+      data.context as DecisionContext,
+      data.brainId,
+      data.brainIds,
+    );
+  });
+
+export const generatePositionForBrainFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => brainTurnSchema.parse(d))
+  .handler(async ({ data }) => {
+    const { generatePositionForBrain } = await import("./orchestration.server");
+    return generatePositionForBrain(
+      data.problem,
+      data.context as DecisionContext,
+      data.brainId,
+      data.interrogation as InterrogationItem[],
+    );
+  });
+
+export const generateFinalPositionForBrainFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    brainTurnSchema.extend({ positions: z.array(z.any()), debate: z.array(z.any()) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { generateFinalPositionForBrain } = await import("./orchestration.server");
+    return generateFinalPositionForBrain(
+      data.problem,
+      data.context as DecisionContext,
+      data.brainId,
+      data.interrogation as InterrogationItem[],
+      data.positions as BrainPosition[],
+      data.debate as DebateMessage[],
+    );
+  });
+
 export const generatePositionsFn = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => baseSchema.parse(d))
   .handler(async ({ data }) => {
@@ -48,6 +90,7 @@ export const generatePositionsFn = createServerFn({ method: "POST" })
       data.interrogation as InterrogationItem[],
     );
   });
+
 
 const positionsInput = baseSchema.extend({ positions: z.array(z.any()) });
 

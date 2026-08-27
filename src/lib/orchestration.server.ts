@@ -124,6 +124,40 @@ Return JSON: {"questions": [{"brainId": "...", "question": "..."}]} — one entr
     .map((id) => ({ brainId: id, question: byId.get(id)! }));
 }
 
+const singleQuestionSchema = z.object({ question: z.string().min(5) });
+
+/** One brain's question, generated on its own so the room can fill up progressively. */
+export async function generateQuestionForBrain(
+  problem: string,
+  context: DecisionContext,
+  brainId: string,
+  allBrainIds: string[],
+): Promise<InterrogationItem> {
+  const brain = getBrain(brainId);
+  if (!brain) throw new Error("Unknown brain");
+  const others = getBrains(allBrainIds.filter((id) => id !== brainId));
+
+  const result = await generateStructured(
+    singleQuestionSchema,
+    `${BASE_PROMPT}
+
+${brainCard(brain)}
+
+Before the debate begins you may ask the user exactly ONE question: the single question whose answer would most change YOUR recommendation. It must sound like you and nobody else at the table.
+Do not ask anything already answered in the context. One sentence, no preamble, no pleasantries.
+
+Also at the table (avoid asking what they would obviously ask): ${
+      others.map((b) => `${b.name} — optimizes for ${b.optimizesFor}`).join("; ") || "(nobody else)"
+    }
+
+Return JSON: {"question": "..."}`,
+    contextBlock(problem, context, []),
+  );
+
+  return { brainId, question: result.question };
+}
+
+
 
 /* --------------------------- round 1: positions --------------------------- */
 
@@ -136,18 +170,17 @@ const positionSchema = z.object({
   confidence: z.number().min(0).max(100),
 });
 
-export async function generatePositions(
+export async function generatePositionForBrain(
   problem: string,
   context: DecisionContext,
-  brainIds: string[],
+  brainId: string,
   interrogation: InterrogationItem[],
-): Promise<BrainPosition[]> {
-  const brains = getBrains(brainIds);
-  const results = await Promise.all(
-    brains.map(async (b) => {
-      const p = await generateStructured(
-        positionSchema,
-        `${BASE_PROMPT}
+): Promise<BrainPosition> {
+  const b = getBrain(brainId);
+  if (!b) throw new Error("Unknown brain");
+  const p = await generateStructured(
+    positionSchema,
+    `${BASE_PROMPT}
 
 ${brainCard(b)}
 
@@ -157,12 +190,19 @@ This is round one. You have not heard the others. Give your independent position
 "confidence" is your own calibrated confidence, 0-100.
 
 Return JSON: {"stance": ..., "recommendation": "...", "reasoning": ["..."], "assumptions": ["..."], "biggestConcern": "...", "confidence": 0-100}`,
-        contextBlock(problem, context, interrogation),
-      );
-      return { brainId: b.id, ...p } satisfies BrainPosition;
-    }),
+    contextBlock(problem, context, interrogation),
   );
-  return results;
+  return { brainId: b.id, ...p } satisfies BrainPosition;
+}
+
+export async function generatePositions(
+  problem: string,
+  context: DecisionContext,
+  brainIds: string[],
+  interrogation: InterrogationItem[],
+): Promise<BrainPosition[]> {
+  const brains = getBrains(brainIds);
+  return Promise.all(brains.map((b) => generatePositionForBrain(problem, context, b.id, interrogation)));
 }
 
 /* ------------------------ round 2: cross examination ---------------------- */
@@ -237,28 +277,27 @@ const updateSchema = positionSchema.extend({
   changeSummary: z.string().nullable().optional(),
 });
 
-export async function generateFinalPositions(
+export async function generateFinalPositionForBrain(
   problem: string,
   context: DecisionContext,
-  brainIds: string[],
+  brainId: string,
   interrogation: InterrogationItem[],
   positions: BrainPosition[],
   debate: DebateMessage[],
-): Promise<UpdatedPosition[]> {
-  const brains = getBrains(brainIds);
+): Promise<UpdatedPosition> {
+  const b = getBrain(brainId);
+  if (!b) throw new Error("Unknown brain");
   const debateBlock = debate
     .map(
       (d) =>
         `${getBrain(d.fromBrainId)?.name} → ${getBrain(d.toBrainId)?.name} (${d.disagreementType}): ${d.challenge}\n  ${getBrain(d.toBrainId)?.name}: ${d.response}`,
     )
     .join("\n\n");
+  const prior = positions.find((p) => p.brainId === b.id);
 
-  return Promise.all(
-    brains.map(async (b) => {
-      const prior = positions.find((p) => p.brainId === b.id);
-      const p = await generateStructured(
-        updateSchema,
-        `${BASE_PROMPT}
+  const p = await generateStructured(
+    updateSchema,
+    `${BASE_PROMPT}
 
 ${brainCard(b)}
 
@@ -266,7 +305,7 @@ You have now heard the table. Give your final position. Do not change your mind 
 If your recommendation, stance, or confidence changed meaningfully, set changedMind true and write changeSummary as one sentence starting with what moved you. Otherwise changedMind is false and changeSummary is null.
 
 Return JSON: {"stance": ..., "recommendation": "...", "reasoning": ["..."], "assumptions": ["..."], "biggestConcern": "...", "confidence": 0-100, "changedMind": true|false, "changeSummary": string or null}`,
-        `${contextBlock(problem, context, interrogation)}
+    `${contextBlock(problem, context, interrogation)}
 
 YOUR ROUND ONE POSITION:
 ${prior ? `[${prior.stance}] ${prior.recommendation} (confidence ${prior.confidence})` : "(none)"}
@@ -276,14 +315,28 @@ ${positionsBlock(positions)}
 
 CROSS-EXAMINATION:
 ${debateBlock || "(none)"}`,
-      );
-      return {
-        brainId: b.id,
-        ...p,
-        changedMind: p.changedMind,
-        changeSummary: p.changeSummary ?? undefined,
-      } satisfies UpdatedPosition;
-    }),
+  );
+
+  return {
+    brainId: b.id,
+    ...p,
+    changedMind: p.changedMind,
+    changeSummary: p.changeSummary ?? undefined,
+  } satisfies UpdatedPosition;
+}
+
+export async function generateFinalPositions(
+  problem: string,
+  context: DecisionContext,
+  brainIds: string[],
+  interrogation: InterrogationItem[],
+  positions: BrainPosition[],
+  debate: DebateMessage[],
+): Promise<UpdatedPosition[]> {
+  return Promise.all(
+    getBrains(brainIds).map((b) =>
+      generateFinalPositionForBrain(problem, context, b.id, interrogation, positions, debate),
+    ),
   );
 }
 
