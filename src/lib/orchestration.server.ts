@@ -124,6 +124,40 @@ Return JSON: {"questions": [{"brainId": "...", "question": "..."}]} — one entr
     .map((id) => ({ brainId: id, question: byId.get(id)! }));
 }
 
+const singleQuestionSchema = z.object({ question: z.string().min(5) });
+
+/** One brain's question, generated on its own so the room can fill up progressively. */
+export async function generateQuestionForBrain(
+  problem: string,
+  context: DecisionContext,
+  brainId: string,
+  allBrainIds: string[],
+): Promise<InterrogationItem> {
+  const brain = getBrain(brainId);
+  if (!brain) throw new Error("Unknown brain");
+  const others = getBrains(allBrainIds.filter((id) => id !== brainId));
+
+  const result = await generateStructured(
+    singleQuestionSchema,
+    `${BASE_PROMPT}
+
+${brainCard(brain)}
+
+Before the debate begins you may ask the user exactly ONE question: the single question whose answer would most change YOUR recommendation. It must sound like you and nobody else at the table.
+Do not ask anything already answered in the context. One sentence, no preamble, no pleasantries.
+
+Also at the table (avoid asking what they would obviously ask): ${
+      others.map((b) => `${b.name} — optimizes for ${b.optimizesFor}`).join("; ") || "(nobody else)"
+    }
+
+Return JSON: {"question": "..."}`,
+    contextBlock(problem, context, []),
+  );
+
+  return { brainId, question: result.question };
+}
+
+
 
 /* --------------------------- round 1: positions --------------------------- */
 
