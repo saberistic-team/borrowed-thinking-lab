@@ -30,25 +30,38 @@ function QuestionsPage() {
   const navigate = useNavigate();
   const { session, ready, update } = useSession(sessionId);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    if (!ready || !session || loading) return;
-    if (session.interrogation.length > 0 || session.selectedBrainIds.length === 0) return;
+  const load = useCallback(() => {
+    const current = getSession(sessionId);
+    if (!current || current.selectedBrainIds.length === 0) return;
     setLoading(true);
+    setFailed(false);
     generateQuestionsFn({
       data: {
-        problem: session.problem,
-        context: session.context,
-        brainIds: session.selectedBrainIds,
+        problem: current.problem,
+        context: current.context,
+        brainIds: current.selectedBrainIds,
       },
     })
-      .then((questions) => update({ interrogation: questions }))
-      .catch((err: unknown) =>
-        toast.error(err instanceof Error ? err.message : "The table went quiet. Try again."),
-      )
+      .then((questions) => {
+        if (questions.length === 0) setFailed(true);
+        else update({ interrogation: questions });
+      })
+      .catch((err: unknown) => {
+        setFailed(true);
+        toast.error(err instanceof Error ? err.message : "The table went quiet. Try again.");
+      })
       .finally(() => setLoading(false));
+  }, [sessionId, update]);
+
+  useEffect(() => {
+    if (!ready || !session || loading || failed) return;
+    if (session.interrogation.length > 0 || session.selectedBrainIds.length === 0) return;
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, session?.id, session?.selectedBrainIds.length]);
+
 
   if (!ready) return <StepFrame step={2} title="Loading" />;
   if (!session)
