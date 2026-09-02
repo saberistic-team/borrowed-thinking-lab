@@ -21,6 +21,7 @@ import { Route as DSessionIdBoardRouteImport } from './routes/d.$sessionId.board
 import { Route as DSessionIdDebateRouteImport } from './routes/d.$sessionId.debate'
 import { Route as DSessionIdQuestionsRouteImport } from './routes/d.$sessionId.questions'
 import { Route as DSessionIdSetupRouteImport } from './routes/d.$sessionId.setup'
+import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,12 @@ const DSessionIdSetupRoute = DSessionIdSetupRouteImport.update({
   path: '/d/$sessionId/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicPaymentsWebhookRoute =
+  ApiPublicPaymentsWebhookRouteImport.update({
+    id: '/api/public/payments/webhook',
+    path: '/api/public/payments/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/d/$sessionId/debate': typeof DSessionIdDebateRoute
   '/d/$sessionId/questions': typeof DSessionIdQuestionsRoute
   '/d/$sessionId/setup': typeof DSessionIdSetupRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +118,7 @@ export interface FileRoutesByTo {
   '/d/$sessionId/debate': typeof DSessionIdDebateRoute
   '/d/$sessionId/questions': typeof DSessionIdQuestionsRoute
   '/d/$sessionId/setup': typeof DSessionIdSetupRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +134,7 @@ export interface FileRoutesById {
   '/d/$sessionId/debate': typeof DSessionIdDebateRoute
   '/d/$sessionId/questions': typeof DSessionIdQuestionsRoute
   '/d/$sessionId/setup': typeof DSessionIdSetupRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/d/$sessionId/debate'
     | '/d/$sessionId/questions'
     | '/d/$sessionId/setup'
+    | '/api/public/payments/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/d/$sessionId/debate'
     | '/d/$sessionId/questions'
     | '/d/$sessionId/setup'
+    | '/api/public/payments/webhook'
   id:
     | '__root__'
     | '/'
@@ -169,6 +181,7 @@ export interface FileRouteTypes {
     | '/d/$sessionId/debate'
     | '/d/$sessionId/questions'
     | '/d/$sessionId/setup'
+    | '/api/public/payments/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +197,7 @@ export interface RootRouteChildren {
   DSessionIdDebateRoute: typeof DSessionIdDebateRoute
   DSessionIdQuestionsRoute: typeof DSessionIdQuestionsRoute
   DSessionIdSetupRoute: typeof DSessionIdSetupRoute
+  ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DSessionIdSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/payments/webhook': {
+      id: '/api/public/payments/webhook'
+      path: '/api/public/payments/webhook'
+      fullPath: '/api/public/payments/webhook'
+      preLoaderRoute: typeof ApiPublicPaymentsWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -288,6 +309,7 @@ const rootRouteChildren: RootRouteChildren = {
   DSessionIdDebateRoute: DSessionIdDebateRoute,
   DSessionIdQuestionsRoute: DSessionIdQuestionsRoute,
   DSessionIdSetupRoute: DSessionIdSetupRoute,
+  ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
